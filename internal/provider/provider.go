@@ -124,6 +124,10 @@ func (p *OPNsenseProvider) Resources(ctx context.Context) []func() resource.Reso
 		service.NewFirewallNATResource,
 		service.NewFirewallAliasResource,
 		service.NewFirewallCategoryResource,
+		// Haproxy
+		service.NewHaproxyBackendResource,
+		service.NewHaproxyFrontendResource,
+		service.NewHaproxyServerResource,
 	}
 }
 
@@ -143,6 +147,10 @@ func (p *OPNsenseProvider) DataSources(ctx context.Context) []func() datasource.
 		service.NewFirewallNATDataSource,
 		service.NewFirewallAliasDataSource,
 		service.NewFirewallCategoryDataSource,
+		// Haproxy
+		service.NewHaproxyBackendDataSource,
+		service.NewHaproxyFrontendDataSource,
+		service.NewHaproxyServerDataSource,
 	}
 }
 
