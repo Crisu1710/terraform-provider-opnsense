@@ -2,7 +2,7 @@ module terraform-provider-opnsense
 
 go 1.20
 
-replace github.com/browningluke/opnsense-go => github.com/Crisu1710/opnsense-go/tree/DEV-HAP
+replace github.com/browningluke/opnsense-go => ../opnsense-go
 
 require (
 	github.com/browningluke/opnsense-go v0.5.0
