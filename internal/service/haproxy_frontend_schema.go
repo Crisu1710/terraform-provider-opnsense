@@ -8,6 +8,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64default"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/setdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -18,8 +19,8 @@ import (
 type HaproxyFrontendResourceModel struct {
 	AdvertisedProtocols          types.String `tfsdk:"advertised_protocols"`
 	BasicAuthEnabled             types.Bool   `tfsdk:"basic_auth_enabled"`
-	BasicAuthGroups              types.String `tfsdk:"basic_auth_groups"`
-	BasicAuthUsers               types.String `tfsdk:"basic_auth_users"`
+	BasicAuthGroups              types.Set    `tfsdk:"basic_auth_groups"`
+	BasicAuthUsers               types.Set    `tfsdk:"basic_auth_users"`
 	Bind                         types.String `tfsdk:"bind"`
 	BindOptions                  types.String `tfsdk:"bind_options"`
 	ConnectionBehaviour          types.String `tfsdk:"connection_behaviour"`
@@ -43,7 +44,7 @@ type HaproxyFrontendResourceModel struct {
 	PrometheusEnabled            types.Bool   `tfsdk:"prometheus_enabled"`
 	PrometheusPath               types.String `tfsdk:"prometheus_path"`
 	SslAdvancedEnabled           types.Bool   `tfsdk:"ssl_advanced_enabled"`
-	SslBindOptions               types.String `tfsdk:"ssl_bind_options"`
+	SslBindOptions               types.Set    `tfsdk:"ssl_bind_options"`
 	SslCertificates              types.String `tfsdk:"ssl_certificates"`
 	SslCipherList                types.String `tfsdk:"ssl_cipher_list"`
 	SslCipherSuites              types.String `tfsdk:"ssl_cipher_suites"`
@@ -65,15 +66,15 @@ type HaproxyFrontendResourceModel struct {
 	StickinessConnRatePeriod     types.String `tfsdk:"stickiness_conn_rate_period"`
 	StickinessCounter            types.Int64  `tfsdk:"stickiness_counter"`
 	StickinessCounterKey         types.String `tfsdk:"stickiness_counter_key"`
-	StickinessDataTypes          types.String `tfsdk:"stickiness_data_types"`
+	StickinessDataTypes          types.Set    `tfsdk:"stickiness_data_types"`
 	StickinessExpire             types.String `tfsdk:"stickiness_expire"`
 	StickinessHttpErrRatePeriod  types.String `tfsdk:"stickiness_http_err_rate_period"`
 	StickinessHttpReqRatePeriod  types.String `tfsdk:"stickiness_http_req_rate_period"`
-	StickinessLength             types.String `tfsdk:"stickiness_length"`
+	StickinessLength             types.Int64  `tfsdk:"stickiness_length"`
 	StickinessPattern            types.String `tfsdk:"stickiness_pattern"`
 	StickinessSessRatePeriod     types.String `tfsdk:"stickiness_sess_rate_period"`
 	StickinessSize               types.String `tfsdk:"stickiness_size"`
-	TuningMaxConnections         types.String `tfsdk:"tuning_max_connections"`
+	TuningMaxConnections         types.Int64  `tfsdk:"tuning_max_connections"`
 	TuningShards                 types.String `tfsdk:"tuning_shards"`
 	TuningTimeoutClient          types.String `tfsdk:"tuning_timeout_client"`
 	TuningTimeoutHttpKeepAlive   types.String `tfsdk:"tuning_timeout_http_keep_alive"`
@@ -99,17 +100,19 @@ func haproxyFrontendResourceSchema() schema.Schema {
 				Computed:            true,
 				Default:             booldefault.StaticBool(false),
 			},
-			"basic_auth_groups": schema.StringAttribute{
+			"basic_auth_groups": schema.SetAttribute{
 				MarkdownDescription: "basicAuthEnabled",
 				Optional:            true,
 				Computed:            true,
-				Default:             stringdefault.StaticString(""),
+				ElementType:         types.StringType,
+				Default:             setdefault.StaticValue(tools.EmptySetValue()),
 			},
-			"basic_auth_users": schema.StringAttribute{
+			"basic_auth_users": schema.SetAttribute{
 				MarkdownDescription: "basicAuthGroups",
 				Optional:            true,
 				Computed:            true,
-				Default:             stringdefault.StaticString(""),
+				ElementType:         types.StringType,
+				Default:             setdefault.StaticValue(tools.EmptySetValue()),
 			},
 			"bind": schema.StringAttribute{
 				MarkdownDescription: "TODO",
@@ -245,11 +248,12 @@ func haproxyFrontendResourceSchema() schema.Schema {
 				Computed:            true,
 				Default:             booldefault.StaticBool(false),
 			},
-			"ssl_bind_options": schema.StringAttribute{
+			"ssl_bind_options": schema.SetAttribute{
 				MarkdownDescription: "TODO",
 				Optional:            true,
 				Computed:            true,
-				Default:             stringdefault.StaticString("prefer-client-ciphers"),
+				ElementType:         types.StringType,
+				Default:             setdefault.StaticValue(tools.EmptySetValue()),
 			},
 			"ssl_certificates": schema.StringAttribute{
 				MarkdownDescription: "TODO",
@@ -377,11 +381,12 @@ func haproxyFrontendResourceSchema() schema.Schema {
 				Computed:            true,
 				Default:             stringdefault.StaticString("src"),
 			},
-			"stickiness_data_types": schema.StringAttribute{
+			"stickiness_data_types": schema.SetAttribute{
 				MarkdownDescription: "TODO",
 				Optional:            true,
 				Computed:            true,
-				Default:             stringdefault.StaticString(""),
+				ElementType:         types.StringType,
+				Default:             setdefault.StaticValue(tools.EmptySetValue()),
 			},
 			"stickiness_expire": schema.StringAttribute{
 				MarkdownDescription: "TODO",
@@ -401,11 +406,11 @@ func haproxyFrontendResourceSchema() schema.Schema {
 				Computed:            true,
 				Default:             stringdefault.StaticString("10s"),
 			},
-			"stickiness_length": schema.StringAttribute{
+			"stickiness_length": schema.Int64Attribute{
 				MarkdownDescription: "TODO",
 				Optional:            true,
 				Computed:            true,
-				Default:             stringdefault.StaticString(""),
+				Default:             int64default.StaticInt64(-1),
 			},
 			"stickiness_pattern": schema.StringAttribute{
 				MarkdownDescription: "TODO",
@@ -425,11 +430,11 @@ func haproxyFrontendResourceSchema() schema.Schema {
 				Computed:            true,
 				Default:             stringdefault.StaticString("50k"),
 			},
-			"tuning_max_connections": schema.StringAttribute{
+			"tuning_max_connections": schema.Int64Attribute{
 				MarkdownDescription: "TODO",
 				Optional:            true,
 				Computed:            true,
-				Default:             stringdefault.StaticString(""),
+				Default:             int64default.StaticInt64(-1),
 			},
 			"tuning_shards": schema.StringAttribute{
 				MarkdownDescription: "TODO",
@@ -483,13 +488,15 @@ func HaproxyFrontendDataSourceSchema() dschema.Schema {
 				MarkdownDescription: "ba_advertised_protocols",
 				Computed:            true,
 			},
-			"basic_auth_groups": schema.StringAttribute{
+			"basic_auth_groups": schema.SetAttribute{
 				MarkdownDescription: "basicAuthEnabled",
 				Computed:            true,
+				ElementType:         types.StringType,
 			},
-			"basic_auth_users": schema.StringAttribute{
+			"basic_auth_users": schema.SetAttribute{
 				MarkdownDescription: "basicAuthGroups",
 				Computed:            true,
+				ElementType:         types.StringType,
 			},
 			"bind": schema.StringAttribute{
 				MarkdownDescription: "TODO",
@@ -583,9 +590,10 @@ func HaproxyFrontendDataSourceSchema() dschema.Schema {
 				MarkdownDescription: "TODO",
 				Computed:            true,
 			},
-			"ssl_bind_options": schema.StringAttribute{
+			"ssl_bind_options": schema.SetAttribute{
 				MarkdownDescription: "TODO",
 				Computed:            true,
+				ElementType:         types.StringType,
 			},
 			"ssl_certificates": schema.StringAttribute{
 				MarkdownDescription: "TODO",
@@ -671,9 +679,10 @@ func HaproxyFrontendDataSourceSchema() dschema.Schema {
 				MarkdownDescription: "TODO",
 				Computed:            true,
 			},
-			"stickiness_data_types": schema.StringAttribute{
+			"stickiness_data_types": schema.SetAttribute{
 				MarkdownDescription: "TODO",
 				Computed:            true,
+				ElementType:         types.StringType,
 			},
 			"stickiness_expire": schema.StringAttribute{
 				MarkdownDescription: "TODO",
@@ -687,7 +696,7 @@ func HaproxyFrontendDataSourceSchema() dschema.Schema {
 				MarkdownDescription: "TODO",
 				Computed:            true,
 			},
-			"stickiness_length": schema.StringAttribute{
+			"stickiness_length": schema.Int64Attribute{
 				MarkdownDescription: "TODO",
 				Computed:            true,
 			},
@@ -731,8 +740,8 @@ func convertHaproxyFrontendSchemaToStruct(d *HaproxyFrontendResourceModel) (*hap
 	return &haproxy.Frontend{
 		AdvertisedProtocols:          api.SelectedMap(d.AdvertisedProtocols.ValueString()),
 		BasicAuthEnabled:             tools.BoolToString(d.BasicAuthEnabled.ValueBool()),
-		BasicAuthGroups:              d.BasicAuthGroups.ValueString(),
-		BasicAuthUsers:               d.BasicAuthUsers.ValueString(),
+		BasicAuthGroups:              tools.SetToString(d.BasicAuthGroups),
+		BasicAuthUsers:               tools.SetToString(d.BasicAuthUsers),
 		Bind:                         d.Bind.ValueString(),
 		BindOptions:                  d.BindOptions.ValueString(),
 		ConnectionBehaviour:          api.SelectedMap(d.ConnectionBehaviour.ValueString()),
@@ -756,7 +765,7 @@ func convertHaproxyFrontendSchemaToStruct(d *HaproxyFrontendResourceModel) (*hap
 		PrometheusEnabled:            tools.BoolToString(d.PrometheusEnabled.ValueBool()),
 		PrometheusPath:               d.PrometheusPath.ValueString(),
 		SslAdvancedEnabled:           tools.BoolToString(d.SslAdvancedEnabled.ValueBool()),
-		SslBindOptions:               api.SelectedMap(d.SslBindOptions.ValueString()),
+		SslBindOptions:               tools.SetToString(d.SslBindOptions),
 		SslCertificates:              api.SelectedMap(d.SslCertificates.ValueString()),
 		SslCipherList:                d.SslCipherList.ValueString(),
 		SslCipherSuites:              d.SslCipherSuites.ValueString(),
@@ -769,24 +778,24 @@ func convertHaproxyFrontendSchemaToStruct(d *HaproxyFrontendResourceModel) (*hap
 		SslEnabled:                   tools.BoolToString(d.SslEnabled.ValueBool()),
 		SslHstsEnabled:               tools.BoolToString(d.SslHstsEnabled.ValueBool()),
 		SslHstsIncludeSubDomains:     tools.BoolToString(d.SslHstsIncludeSubDomains.ValueBool()),
-		SslHstsMaxAge:                tools.Int64ToString(d.SslHstsMaxAge.ValueInt64()),
+		SslHstsMaxAge:                tools.Int64ToStringNegative(d.SslHstsMaxAge.ValueInt64()),
 		SslHstsPreload:               d.SslHstsPreload.ValueString(),
 		SslMaxVersion:                api.SelectedMap(d.SslMaxVersion.ValueString()),
 		SslMinVersion:                api.SelectedMap(d.SslMinVersion.ValueString()),
 		StickinessBytesInRatePeriod:  d.StickinessBytesInRatePeriod.ValueString(),
 		StickinessBytesOutRatePeriod: d.StickinessBytesOutRatePeriod.ValueString(),
 		StickinessConnRatePeriod:     d.StickinessConnRatePeriod.ValueString(),
-		StickinessCounter:            tools.Int64ToString(d.StickinessCounter.ValueInt64()),
+		StickinessCounter:            tools.Int64ToStringNegative(d.StickinessCounter.ValueInt64()),
 		StickinessCounterKey:         d.StickinessCounterKey.ValueString(),
-		StickinessDataTypes:          api.SelectedMap(d.StickinessDataTypes.ValueString()),
+		StickinessDataTypes:          tools.SetToString(d.StickinessDataTypes),
 		StickinessExpire:             d.StickinessExpire.ValueString(),
 		StickinessHttpErrRatePeriod:  d.StickinessHttpErrRatePeriod.ValueString(),
 		StickinessHttpReqRatePeriod:  d.StickinessHttpReqRatePeriod.ValueString(),
-		StickinessLength:             d.StickinessLength.ValueString(),
+		StickinessLength:             tools.Int64ToStringNegative(d.StickinessLength.ValueInt64()),
 		StickinessPattern:            api.SelectedMap(d.StickinessPattern.ValueString()),
 		StickinessSessRatePeriod:     d.StickinessSessRatePeriod.ValueString(),
 		StickinessSize:               d.StickinessSize.ValueString(),
-		TuningMaxConnections:         d.TuningMaxConnections.ValueString(),
+		TuningMaxConnections:         tools.Int64ToStringNegative(d.TuningMaxConnections.ValueInt64()),
 		TuningShards:                 d.TuningShards.ValueString(),
 		TuningTimeoutClient:          d.TuningTimeoutClient.ValueString(),
 		TuningTimeoutHttpKeepAlive:   d.TuningTimeoutHttpKeepAlive.ValueString(),
@@ -798,8 +807,8 @@ func convertHaproxyFrontendStructToSchema(d *haproxy.Frontend) (*HaproxyFrontend
 	return &HaproxyFrontendResourceModel{
 		AdvertisedProtocols:          types.StringValue(d.AdvertisedProtocols.String()),
 		BasicAuthEnabled:             types.BoolValue(tools.StringToBool(d.BasicAuthEnabled)),
-		BasicAuthGroups:              types.StringValue(d.BasicAuthGroups),
-		BasicAuthUsers:               types.StringValue(d.BasicAuthUsers),
+		BasicAuthGroups:              tools.StringToSet(d.BasicAuthGroups),
+		BasicAuthUsers:               tools.StringToSet(d.BasicAuthUsers),
 		Bind:                         types.StringValue(d.Bind),
 		BindOptions:                  types.StringValue(d.BindOptions),
 		ConnectionBehaviour:          types.StringValue(d.ConnectionBehaviour.String()),
@@ -823,7 +832,7 @@ func convertHaproxyFrontendStructToSchema(d *haproxy.Frontend) (*HaproxyFrontend
 		PrometheusEnabled:            types.BoolValue(tools.StringToBool(d.PrometheusEnabled)),
 		PrometheusPath:               types.StringValue(d.PrometheusPath),
 		SslAdvancedEnabled:           types.BoolValue(tools.StringToBool(d.SslAdvancedEnabled)),
-		SslBindOptions:               types.StringValue(d.SslBindOptions.String()),
+		SslBindOptions:               tools.StringToSet(d.SslBindOptions),
 		SslCertificates:              types.StringValue(d.SslCertificates.String()),
 		SslCipherList:                types.StringValue(d.SslCipherList),
 		SslCipherSuites:              types.StringValue(d.SslCipherSuites),
@@ -845,15 +854,15 @@ func convertHaproxyFrontendStructToSchema(d *haproxy.Frontend) (*HaproxyFrontend
 		StickinessConnRatePeriod:     types.StringValue(d.StickinessConnRatePeriod),
 		StickinessCounter:            types.Int64Value(tools.StringToInt64(d.StickinessCounter)),
 		StickinessCounterKey:         types.StringValue(d.StickinessCounterKey),
-		StickinessDataTypes:          types.StringValue(d.StickinessDataTypes.String()),
+		StickinessDataTypes:          tools.StringToSet(d.StickinessDataTypes),
 		StickinessExpire:             types.StringValue(d.StickinessExpire),
 		StickinessHttpErrRatePeriod:  types.StringValue(d.StickinessHttpErrRatePeriod),
 		StickinessHttpReqRatePeriod:  types.StringValue(d.StickinessHttpReqRatePeriod),
-		StickinessLength:             types.StringValue(d.StickinessLength),
+		StickinessLength:             types.Int64Value(tools.StringToInt64(d.StickinessLength)),
 		StickinessPattern:            types.StringValue(d.StickinessPattern.String()),
 		StickinessSessRatePeriod:     types.StringValue(d.StickinessSessRatePeriod),
 		StickinessSize:               types.StringValue(d.StickinessSize),
-		TuningMaxConnections:         types.StringValue(d.TuningMaxConnections),
+		TuningMaxConnections:         types.Int64Value(tools.StringToInt64(d.TuningMaxConnections)),
 		TuningShards:                 types.StringValue(d.TuningShards),
 		TuningTimeoutClient:          types.StringValue(d.TuningTimeoutClient),
 		TuningTimeoutHttpKeepAlive:   types.StringValue(d.TuningTimeoutHttpKeepAlive),
