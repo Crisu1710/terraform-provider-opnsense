@@ -3,6 +3,8 @@ package service
 import (
 	"github.com/browningluke/opnsense-go/pkg/api"
 	"github.com/browningluke/opnsense-go/pkg/haproxy"
+	"github.com/hashicorp/terraform-plugin-framework-validators/setvalidator"
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	dschema "github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
@@ -11,6 +13,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/setdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"terraform-provider-opnsense/internal/tools"
 )
@@ -18,7 +21,7 @@ import (
 // HaproxyBackendResourceModel describes the resource data model.
 type HaproxyBackendResourceModel struct {
 	Algorithm                    types.String `tfsdk:"algorithm"`
-	BaAdvertisedProtocols        types.String `tfsdk:"ba_advertised_protocols"`
+	BaAdvertisedProtocols        types.Set    `tfsdk:"ba_advertised_protocols"`
 	BasicAuthEnabled             types.Bool   `tfsdk:"basic_auth_enabled"`
 	BasicAuthGroups              types.Set    `tfsdk:"basic_auth_groups"`
 	BasicAuthUsers               types.Set    `tfsdk:"basic_auth_users"`
@@ -84,13 +87,20 @@ func haproxyBackendResourceSchema() schema.Schema {
 				MarkdownDescription: "Define the load balancing algorithm to be used in a Backend Pool. See the [HAProxy documentation](https://docs.haproxy.org/2.6/configuration.html#balance) for a full description.",
 				Optional:            true,
 				Computed:            true,
-				Default:             stringdefault.StaticString("source"),
+				Validators: []validator.String{
+					stringvalidator.OneOf("source", "roundrobin", "static-rr", "leastconn", "uri", "random"),
+				},
+				Default: stringdefault.StaticString("source"),
 			},
-			"ba_advertised_protocols": schema.StringAttribute{
+			"ba_advertised_protocols": schema.SetAttribute{
 				MarkdownDescription: "When using the TLS ALPN extension, HAProxy advertises the specified protocol list as supported on top of ALPN. TLS must be enabled.",
 				Optional:            true,
 				Computed:            true,
-				Default:             stringdefault.StaticString("h2,http11"),
+				ElementType:         types.StringType,
+				Validators: []validator.Set{
+					setvalidator.ValueStringsAre(stringvalidator.OneOf("h2", "http11", "http10")),
+				},
+				Default: setdefault.StaticValue(tools.AppendSetValue([]string{"h2", "http11"})),
 			},
 			"basic_auth_enabled": schema.BoolAttribute{
 				MarkdownDescription: "Enable HTTP Basic Authentication.",
@@ -227,23 +237,35 @@ func haproxyBackendResourceSchema() schema.Schema {
 				MarkdownDescription: "Set the running mode or protocol of the Backend Pool. Usually the Public Service and the Backend Pool are in the same mode.",
 				Optional:            true,
 				Computed:            true,
-				Default:             stringdefault.StaticString("http"),
+				Validators: []validator.String{
+					stringvalidator.OneOf("http", "tcp"),
+				},
+				Default: stringdefault.StaticString("http"),
 			},
 			"name": schema.StringAttribute{
 				MarkdownDescription: "Name to identify this Backend Pool.",
 				Required:            true,
+				Validators: []validator.String{
+					stringvalidator.LengthBetween(1, 255),
+				},
 			},
 			"persistence": schema.StringAttribute{
 				MarkdownDescription: "Choose (sticktable, cookie) how HAProxy should track user-to-server mappings.",
 				Optional:            true,
 				Computed:            true,
-				Default:             stringdefault.StaticString("sticktable"),
+				Validators: []validator.String{
+					stringvalidator.OneOf("", "sticktable", "cookie"),
+				},
+				Default: stringdefault.StaticString("sticktable"),
 			},
 			"persistence_cookiemode": schema.StringAttribute{
 				MarkdownDescription: "(piggyback or new) Usually it is better to reuse an existing cookie. In this case HAProxy prefixes the cookie with the required information. See the [HAProxy documentation](https://docs.haproxy.org/2.6/configuration.html#4.2-cookie) for a full description.",
 				Optional:            true,
 				Computed:            true,
-				Default:             stringdefault.StaticString("piggyback"),
+				Validators: []validator.String{
+					stringvalidator.OneOf("piggyback", "new"),
+				},
+				Default: stringdefault.StaticString("piggyback"),
 			},
 			"persistence_cookiename": schema.StringAttribute{
 				MarkdownDescription: "Cookie name to use for persistence.",
@@ -261,7 +283,10 @@ func haproxyBackendResourceSchema() schema.Schema {
 				MarkdownDescription: "Enforces use of the PROXY protocol over any connection established to the configured servers. (v1, v2, unset to deactivate)",
 				Optional:            true,
 				Computed:            true,
-				Default:             stringdefault.StaticString(""),
+				Validators: []validator.String{
+					stringvalidator.OneOf("", "v1", "v2"),
+				},
+				Default: stringdefault.StaticString(""),
 			},
 			"random_draws": schema.Int64Attribute{
 				MarkdownDescription: "When using the Random Balancing Algorithm, this value indicates the number of draws before selecting the least loaded of these servers.",
@@ -273,14 +298,20 @@ func haproxyBackendResourceSchema() schema.Schema {
 				MarkdownDescription: "When DNS resolution is enabled for a server and multiple IP addresses from different families are returned, HAProxy will prefer using an IP address from the selected family. (ipv4, ipv6)",
 				Optional:            true,
 				Computed:            true,
-				Default:             stringdefault.StaticString(""),
+				Validators: []validator.String{
+					stringvalidator.OneOf("", "ipv4", "ipv6"),
+				},
+				Default: stringdefault.StaticString(""),
 			},
 			"resolver_opts": schema.SetAttribute{
 				MarkdownDescription: "Add resolver options seperated by ```,``` (allow-dup-ip, allow-dup-ip, prevent-dup-ip).",
 				Optional:            true,
 				Computed:            true,
 				ElementType:         types.StringType,
-				Default:             setdefault.StaticValue(tools.EmptySetValue()),
+				Validators: []validator.Set{
+					setvalidator.ValueStringsAre(stringvalidator.OneOf("", "allow-dup-ip", "ignore-weight", "prevent-dup-ip")),
+				},
+				Default: setdefault.StaticValue(tools.EmptySetValue()),
 			},
 			"source": schema.StringAttribute{
 				MarkdownDescription: "Sets the source address which will be used when connecting to the server(s).",
@@ -323,7 +354,10 @@ func haproxyBackendResourceSchema() schema.Schema {
 				Optional:            true,
 				Computed:            true,
 				ElementType:         types.StringType,
-				Default:             setdefault.StaticValue(tools.EmptySetValue()),
+				Validators: []validator.Set{
+					setvalidator.ValueStringsAre(stringvalidator.OneOf("", "conn_cnt", "conn_cur", "conn_rate", "sess_cnt", "sess_rate", "http_req_cnt", "http_req_rate", "http_err_cnt", "http_err_rate", "bytes_in_cnt", "bytes_in_rate", "bytes_out_cnt", "bytes_out_rate")),
+				},
+				Default: setdefault.StaticValue(tools.EmptySetValue()),
 			},
 			"stickiness_expire": schema.StringAttribute{
 				MarkdownDescription: "Enter a number followed by one of the supported suffixes d, h, m, s, ms. This configures the maximum duration of an entry in the stick-table since it was last created, refreshed or matched. The maximum duration is slightly above 24 days.",
@@ -347,7 +381,10 @@ func haproxyBackendResourceSchema() schema.Schema {
 				MarkdownDescription: "The request pattern to associate a user to a server (sourceipv4, sourceipv6, cookievalue, rdpcookie). See the [HAProxy documentation](https://docs.haproxy.org/2.6/configuration.html#stick%20on) for a full description.",
 				Optional:            true,
 				Computed:            true,
-				Default:             stringdefault.StaticString("sourceipv4"),
+				Validators: []validator.String{
+					stringvalidator.OneOf("", "sourceipv4", "sourceipv6", "cookievalue", "rdpcookie"),
+				},
+				Default: stringdefault.StaticString("sourceipv4"),
 			},
 			"stickiness_sess_rate_period": schema.StringAttribute{
 				MarkdownDescription: "The length of the period over which the average is measured. It reports the average incoming session rate over that period, in sessions per period. Defaults to milliseconds. Optionally the unit may be specified as either d, h, m, s, ms or us.",
@@ -377,7 +414,10 @@ func haproxyBackendResourceSchema() schema.Schema {
 				MarkdownDescription: "Declare how idle HTTP connections may be shared between requests. (never, safe, aggressive, always)",
 				Optional:            true,
 				Computed:            true,
-				Default:             stringdefault.StaticString("safe"),
+				Validators: []validator.String{
+					stringvalidator.OneOf("", "never", "safe", "aggressive", "always"),
+				},
+				Default: stringdefault.StaticString("safe"),
 			},
 			"tuning_noport": schema.BoolAttribute{
 				MarkdownDescription: "Don't use port on server, use the same port as frontend receive. If enabled, require port check in server.",
@@ -430,226 +470,227 @@ func HaproxyBackendDataSourceSchema() dschema.Schema {
 				Required:            true,
 			},
 			"algorithm": schema.StringAttribute{
-				MarkdownDescription: "TODO",
+				MarkdownDescription: "Define the load balancing algorithm to be used in a Backend Pool. See the [HAProxy documentation](https://docs.haproxy.org/2.6/configuration.html#balance) for a full description.",
 				Computed:            true,
 			},
-			"ba_advertised_protocols": schema.StringAttribute{
-				MarkdownDescription: "ba_advertised_protocols",
+			"ba_advertised_protocols": schema.SetAttribute{
+				MarkdownDescription: "When using the TLS ALPN extension, HAProxy advertises the specified protocol list as supported on top of ALPN. TLS must be enabled.",
 				Computed:            true,
+				ElementType:         types.StringType,
 			},
 			"basic_auth_enabled": schema.BoolAttribute{
-				MarkdownDescription: "basicAuthEnabled",
+				MarkdownDescription: "Enable HTTP Basic Authentication.",
 				Computed:            true,
 			},
 			"basic_auth_groups": schema.SetAttribute{
-				MarkdownDescription: "basicAuthGroups",
+				MarkdownDescription: "list of groups seperated by ,",
 				Computed:            true,
 				ElementType:         types.StringType,
 			},
 			"basic_auth_users": schema.SetAttribute{
-				MarkdownDescription: "TODO",
+				MarkdownDescription: "list of users seperated by ,",
 				Computed:            true,
 				ElementType:         types.StringType,
 			},
 			"check_down_interval": schema.Int64Attribute{
-				MarkdownDescription: "TODO",
+				MarkdownDescription: "Sets the interval (in milliseconds) for running health checks on a configured server when the server state is DOWN. If it is not set HAProxy uses the check interval.",
 				Computed:            true,
 			},
 			"check_interval": schema.Int64Attribute{
-				MarkdownDescription: "TODO",
+				MarkdownDescription: "Sets the interval (in milliseconds) for running health checks on all configured servers. This setting takes precedence over default values in health monitors and real servers.",
 				Computed:            true,
 			},
 			"custom_options": schema.StringAttribute{
-				MarkdownDescription: "TODO",
+				MarkdownDescription: "These line will be added to the HAProxy backend configuration.",
 				Computed:            true,
 			},
 			"description": schema.StringAttribute{
-				MarkdownDescription: "TODO",
+				MarkdownDescription: "Description for this Backend Pool.",
 				Computed:            true,
 			},
 			"enabled": schema.BoolAttribute{
-				MarkdownDescription: "TODO",
+				MarkdownDescription: "Enable this Backend Pool",
 				Computed:            true,
 			},
 			"health_check": schema.StringAttribute{
-				MarkdownDescription: "TODO",
+				MarkdownDescription: "Select Health Monitor for servers in this backend.",
 				Computed:            true,
 			},
 			"health_check_enabled": schema.BoolAttribute{
-				MarkdownDescription: "TODO",
+				MarkdownDescription: "Enable or disable health checking.",
 				Computed:            true,
 			},
 			"health_check_fall": schema.Int64Attribute{
-				MarkdownDescription: "TODO",
+				MarkdownDescription: "The number of consecutive unsuccessful health checks before a server is considered as unavailable.",
 				Computed:            true,
 			},
 			"health_check_log_status": schema.BoolAttribute{
-				MarkdownDescription: "TODO",
+				MarkdownDescription: "Enable to log health check status updates.",
 				Computed:            true,
 			},
 			"health_check_rise": schema.Int64Attribute{
-				MarkdownDescription: "TODO",
+				MarkdownDescription: "The number of consecutive successful health checks before a server is considered as available.",
 				Computed:            true,
 			},
 			"http2enabled": schema.BoolAttribute{
-				MarkdownDescription: "TODO",
+				MarkdownDescription: "Enable support for end-to-end HTTP/2 communication.",
 				Computed:            true,
 			},
 			"http2enabled_nontls": schema.BoolAttribute{
-				MarkdownDescription: "TODO",
+				MarkdownDescription: "Enable support for HTTP/2 even if TLS is not enabled.",
 				Computed:            true,
 			},
 			"linked_actions": schema.SetAttribute{
-				MarkdownDescription: "TODO",
+				MarkdownDescription: "list of rules seperated by ```,``` to be included in this Backend Pool.",
 				Computed:            true,
 				ElementType:         types.StringType,
 			},
 			"linked_errorfiles": schema.SetAttribute{
-				MarkdownDescription: "TODO",
+				MarkdownDescription: "list of error messages seperated by ```,``` to be included in this Backend Pool.",
 				Computed:            true,
 				ElementType:         types.StringType,
 			},
 			"linked_fcgi": schema.StringAttribute{
-				MarkdownDescription: "TODO",
+				MarkdownDescription: "The FastCGI application that should be used for all servers in this backend.",
 				Computed:            true,
 			},
 			"linked_mailer": schema.StringAttribute{
-				MarkdownDescription: "TODO",
+				MarkdownDescription: "Set an e-mail alert configuration. An e-mail is sent when the state of a server changes.",
 				Computed:            true,
 			},
 			"linked_resolver": schema.StringAttribute{
-				MarkdownDescription: "TODO",
+				MarkdownDescription: "The the custom resolver configuration that should be used for all servers in this backend.",
 				Computed:            true,
 			},
 			"linked_servers": schema.SetAttribute{
-				MarkdownDescription: "TODO",
+				MarkdownDescription: "Link the server(s) to this backend.",
 				Computed:            true,
 				ElementType:         types.StringType,
 			},
 			"mode": schema.StringAttribute{
-				MarkdownDescription: "TODO",
+				MarkdownDescription: "Set the running mode or protocol of the Backend Pool. Usually the Public Service and the Backend Pool are in the same mode.",
 				Computed:            true,
 			},
 			"name": schema.StringAttribute{
-				MarkdownDescription: "TODO",
+				MarkdownDescription: "Name to identify this Backend Pool.",
 				Required:            true,
 			},
 			"persistence": schema.StringAttribute{
-				MarkdownDescription: "TODO",
+				MarkdownDescription: "Choose (sticktable, cookie) how HAProxy should track user-to-server mappings.",
 				Computed:            true,
 			},
 			"persistence_cookiemode": schema.StringAttribute{
-				MarkdownDescription: "TODO",
+				MarkdownDescription: "(piggyback or new) Usually it is better to reuse an existing cookie. In this case HAProxy prefixes the cookie with the required information. See the [HAProxy documentation](https://docs.haproxy.org/2.6/configuration.html#4.2-cookie) for a full description.",
 				Computed:            true,
 			},
 			"persistence_cookiename": schema.StringAttribute{
-				MarkdownDescription: "TODO",
+				MarkdownDescription: "Cookie name to use for persistence.",
 				Computed:            true,
 			},
 			"persistence_stripquotes": schema.BoolAttribute{
-				MarkdownDescription: "TODO",
+				MarkdownDescription: "Enable to automatically strip quotes from the cookie value.",
 				Computed:            true,
 			},
 			"proxy_protocol": schema.StringAttribute{
-				MarkdownDescription: "TODO",
+				MarkdownDescription: "Enforces use of the PROXY protocol over any connection established to the configured servers. (v1, v2, unset to deactivate)",
 				Computed:            true,
 			},
 			"random_draws": schema.Int64Attribute{
-				MarkdownDescription: "TODO",
+				MarkdownDescription: "When using the Random Balancing Algorithm, this value indicates the number of draws before selecting the least loaded of these servers.",
 				Computed:            true,
 			},
 			"resolve_prefer": schema.StringAttribute{
-				MarkdownDescription: "TODO",
+				MarkdownDescription: "When DNS resolution is enabled for a server and multiple IP addresses from different families are returned, HAProxy will prefer using an IP address from the selected family. (ipv4, ipv6)",
 				Computed:            true,
 			},
 			"resolver_opts": schema.SetAttribute{
-				MarkdownDescription: "TODO",
+				MarkdownDescription: "Add resolver options seperated by ```,``` (allow-dup-ip, allow-dup-ip, prevent-dup-ip).",
 				Computed:            true,
 				ElementType:         types.StringType,
 			},
 			"source": schema.StringAttribute{
-				MarkdownDescription: "TODO",
+				MarkdownDescription: "Sets the source address which will be used when connecting to the server(s).",
 				Computed:            true,
 			},
 			"stickiness_bytes_in_rate_period": schema.StringAttribute{
-				MarkdownDescription: "TODO",
+				MarkdownDescription: "The length of the period over which the average is measured. It reports the average incoming bytes rate over that period, in bytes per period. Defaults to milliseconds. Optionally the unit may be specified as either d, h, m, s, ms or us.",
 				Computed:            true,
 			},
 			"stickiness_bytes_out_rate_period": schema.StringAttribute{
-				MarkdownDescription: "TODO",
+				MarkdownDescription: "The length of the period over which the average is measured. It reports the average outgoing bytes rate over that period, in bytes per period. Defaults to milliseconds. Optionally the unit may be specified as either d, h, m, s, ms or us.",
 				Computed:            true,
 			},
 			"stickiness_conn_rate_period": schema.StringAttribute{
-				MarkdownDescription: "TODO",
+				MarkdownDescription: "The length of the period over which the average is measured. It reports the average incoming connection rate over that period, in connections per period. Defaults to milliseconds. Optionally the unit may be specified as either d, h, m, s, ms or us.",
 				Computed:            true,
 			},
 			"stickiness_cookielength": schema.Int64Attribute{
-				MarkdownDescription: "TODO",
+				MarkdownDescription: "The maximum number of characters that will be stored in the stick table (if appropiate table type is selected).",
 				Computed:            true,
 			},
 			"stickiness_cookiename": schema.StringAttribute{
-				MarkdownDescription: "TODO",
+				MarkdownDescription: "Cookie name to use for stick table (if appropiate table type is selected).",
 				Computed:            true,
 			},
 			"stickiness_data_types": schema.SetAttribute{
-				MarkdownDescription: "TODO",
+				MarkdownDescription: "This is used to store additional information in the stick-table. ",
 				Computed:            true,
 				ElementType:         types.StringType,
 			},
 			"stickiness_expire": schema.StringAttribute{
-				MarkdownDescription: "TODO",
+				MarkdownDescription: "Enter a number followed by one of the supported suffixes d, h, m, s, ms. This configures the maximum duration of an entry in the stick-table since it was last created, refreshed or matched. The maximum duration is slightly above 24 days.",
 				Computed:            true,
 			},
 			"stickiness_http_err_rate_period": schema.StringAttribute{
-				MarkdownDescription: "TODO",
+				MarkdownDescription: "The length of the period over which the average is measured. It reports the average HTTP request error rate over that period, in requests per period. Defaults to milliseconds. Optionally the unit may be specified as either d, h, m, s, ms or us.",
 				Computed:            true,
 			},
 			"stickiness_http_req_rate_period": schema.StringAttribute{
-				MarkdownDescription: "TODO",
+				MarkdownDescription: "The length of the period over which the average is measured. It reports the average HTTP request rate over that period, in requests per period. Defaults to milliseconds. Optionally the unit may be specified as either d, h, m, s, ms or us.",
 				Computed:            true,
 			},
 			"stickiness_pattern": schema.StringAttribute{
-				MarkdownDescription: "TODO",
+				MarkdownDescription: "The request pattern to associate a user to a server (sourceipv4, sourceipv6, cookievalue, rdpcookie). See the [HAProxy documentation](https://docs.haproxy.org/2.6/configuration.html#stick%20on) for a full description.",
 				Computed:            true,
 			},
 			"stickiness_sess_rate_period": schema.StringAttribute{
-				MarkdownDescription: "TODO",
+				MarkdownDescription: "The length of the period over which the average is measured. It reports the average incoming session rate over that period, in sessions per period. Defaults to milliseconds. Optionally the unit may be specified as either d, h, m, s, ms or us.",
 				Computed:            true,
 			},
 			"stickiness_size": schema.StringAttribute{
-				MarkdownDescription: "TODO",
+				MarkdownDescription: "Enter a number followed by one of the supported suffixes k, m, g.",
 				Computed:            true,
 			},
 			"tuning_caching": schema.BoolAttribute{
-				MarkdownDescription: "TODO",
+				MarkdownDescription: "Enable caching of responses from this backend. The HAProxy cache must be enabled under Settings before this will have any effect.",
 				Computed:            true,
 			},
 			"tuning_defaultserver": schema.StringAttribute{
-				MarkdownDescription: "TODO",
+				MarkdownDescription: "Default option for all server entries.",
 				Computed:            true,
 			},
 			"tuning_httpreuse": schema.StringAttribute{
-				MarkdownDescription: "TODO",
+				MarkdownDescription: "Declare how idle HTTP connections may be shared between requests. (never, safe, aggressive, always)",
 				Computed:            true,
 			},
 			"tuning_noport": schema.BoolAttribute{
-				MarkdownDescription: "TODO",
+				MarkdownDescription: "Don't use port on server, use the same port as frontend receive. If enabled, require port check in server.",
 				Computed:            true,
 			},
 			"tuning_retries": schema.Int64Attribute{
-				MarkdownDescription: "TODO",
+				MarkdownDescription: "Set the number of retries to perform on a server after a connection failure.",
 				Computed:            true,
 			},
 			"tuning_timeout_check": schema.StringAttribute{
-				MarkdownDescription: "TODO",
+				MarkdownDescription: "Sets an additional read timeout for running health checks on a server. Defaults to milliseconds. Optionally the unit may be specified as either d, h, m, s, ms or us.",
 				Computed:            true,
 			},
 			"tuning_timeout_connect": schema.StringAttribute{
-				MarkdownDescription: "TODO",
+				MarkdownDescription: "Set the maximum time to wait for a connection attempt to a server to succeed. Defaults to milliseconds. Optionally the unit may be specified as either d, h, m, s, ms or us.",
 				Computed:            true,
 			},
 			"tuning_timeout_server": schema.StringAttribute{
-				MarkdownDescription: "TODO",
+				MarkdownDescription: "Set the maximum inactivity time on the server side. Defaults to milliseconds. Optionally the unit may be specified as either d, h, m, s, ms or us.",
 				Computed:            true,
 			},
 		},
@@ -659,7 +700,7 @@ func HaproxyBackendDataSourceSchema() dschema.Schema {
 func convertHaproxyBackendSchemaToStruct(d *HaproxyBackendResourceModel) (*haproxy.Backend, error) {
 	return &haproxy.Backend{
 		Algorithm:                    api.SelectedMap(d.Algorithm.ValueString()),
-		BaAdvertisedProtocols:        api.SelectedMap(d.BaAdvertisedProtocols.ValueString()),
+		BaAdvertisedProtocols:        tools.SetToString(d.BaAdvertisedProtocols),
 		BasicAuthEnabled:             tools.BoolToString(d.BasicAuthEnabled.ValueBool()),
 		BasicAuthGroups:              tools.SetToString(d.BasicAuthGroups),
 		BasicAuthUsers:               tools.SetToString(d.BasicAuthUsers),
@@ -718,7 +759,7 @@ func convertHaproxyBackendSchemaToStruct(d *HaproxyBackendResourceModel) (*hapro
 func convertHaproxyBackendStructToSchema(d *haproxy.Backend) (*HaproxyBackendResourceModel, error) {
 	return &HaproxyBackendResourceModel{
 		Algorithm:                    types.StringValue(d.Algorithm.String()),
-		BaAdvertisedProtocols:        types.StringValue(d.BaAdvertisedProtocols.String()),
+		BaAdvertisedProtocols:        tools.StringToSet(d.BaAdvertisedProtocols),
 		BasicAuthEnabled:             types.BoolValue(tools.StringToBool(d.BasicAuthEnabled)),
 		BasicAuthGroups:              tools.StringToSet(d.BasicAuthGroups),
 		BasicAuthUsers:               tools.StringToSet(d.BasicAuthUsers),

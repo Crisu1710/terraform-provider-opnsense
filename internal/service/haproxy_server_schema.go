@@ -3,13 +3,16 @@ package service
 import (
 	"github.com/browningluke/opnsense-go/pkg/api"
 	"github.com/browningluke/opnsense-go/pkg/haproxy"
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	dschema "github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64default"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/setdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"terraform-provider-opnsense/internal/tools"
 )
@@ -35,7 +38,7 @@ type HaproxyServerResourceModel struct {
 	ServiceName          types.String `tfsdk:"service_name"`
 	Source               types.String `tfsdk:"source"`
 	Ssl                  types.Bool   `tfsdk:"ssl"`
-	SslCA                types.String `tfsdk:"ssl_ca"`
+	SslCA                types.Set    `tfsdk:"ssl_ca"`
 	SslClientCertificate types.String `tfsdk:"ssl_client_certificate"`
 	SslCRL               types.String `tfsdk:"ssl_crl"`
 	SslSNI               types.String `tfsdk:"ssl_sni"`
@@ -110,17 +113,26 @@ func haproxyServerResourceSchema() schema.Schema {
 				MarkdownDescription: "Sets the operation mode to use for this server.  (active, backup, disabled)",
 				Optional:            true,
 				Computed:            true,
-				Default:             stringdefault.StaticString("active"),
+				Validators: []validator.String{
+					stringvalidator.OneOf("", "active", "backup", "disabled"),
+				},
+				Default: stringdefault.StaticString("active"),
 			},
 			"multiplexer_protocol": schema.StringAttribute{
 				MarkdownDescription: "Forces the multiplexer's protocol to use for the outgoing connections to this server. (unspecified, fcgi, h1, h2)",
 				Optional:            true,
 				Computed:            true,
-				Default:             stringdefault.StaticString("unspecified"),
+				Validators: []validator.String{
+					stringvalidator.OneOf("", "unspecified", "fcgi", "h2", "h1"),
+				},
+				Default: stringdefault.StaticString("unspecified"),
 			},
 			"name": schema.StringAttribute{
 				MarkdownDescription: "Name to identify a static server. When creating a server template, then this prefix is used for the server names to be built.",
 				Required:            true,
+				Validators: []validator.String{
+					stringvalidator.LengthBetween(1, 255),
+				},
 			},
 			"number": schema.StringAttribute{
 				MarkdownDescription: "",
@@ -138,13 +150,19 @@ func haproxyServerResourceSchema() schema.Schema {
 				MarkdownDescription: "When DNS resolution is enabled for a server and multiple IP addresses from different families (ipv4, ipv6) are returned, HAProxy will prefer using an IP address from the selected family.",
 				Optional:            true,
 				Computed:            true,
-				Default:             stringdefault.StaticString(""),
+				Validators: []validator.String{
+					stringvalidator.OneOf("", "ipv4", "ipv6"),
+				},
+				Default: stringdefault.StaticString(""),
 			},
 			"resolver_opts": schema.StringAttribute{
 				MarkdownDescription: "(allow-dup-ip, ignore-weight, prevent-dup-ip)",
 				Optional:            true,
 				Computed:            true,
-				Default:             stringdefault.StaticString(""),
+				Validators: []validator.String{
+					stringvalidator.OneOf("", "allow-dup-ip", "ignore-weight", "prevent-dup-ip"),
+				},
+				Default: stringdefault.StaticString(""),
 			},
 			"service_name": schema.StringAttribute{
 				MarkdownDescription: "TODO",
@@ -164,11 +182,12 @@ func haproxyServerResourceSchema() schema.Schema {
 				Computed:            true,
 				Default:             booldefault.StaticBool(false),
 			},
-			"ssl_ca": schema.StringAttribute{
+			"ssl_ca": schema.SetAttribute{
 				MarkdownDescription: "The selected CAs will be used to verify the server certificate.",
 				Optional:            true,
 				Computed:            true,
-				Default:             stringdefault.StaticString(""),
+				ElementType:         types.StringType,
+				Default:             setdefault.StaticValue(tools.EmptySetValue()),
 			},
 			"ssl_client_certificate": schema.StringAttribute{
 				MarkdownDescription: "This certificate will be sent if the server send a client certificate request.",
@@ -195,10 +214,13 @@ func haproxyServerResourceSchema() schema.Schema {
 				Default:             booldefault.StaticBool(true),
 			},
 			"type": schema.StringAttribute{
-				MarkdownDescription: "\n\t\nEither configure a static server or a template to initialize multiple servers with shared parameters. (static, template, unix)",
+				MarkdownDescription: "Either configure a static server or a template to initialize multiple servers with shared parameters. (static, template, unix)",
 				Optional:            true,
 				Computed:            true,
-				Default:             stringdefault.StaticString("static"),
+				Validators: []validator.String{
+					stringvalidator.OneOf("static", "template", "unix"),
+				},
+				Default: stringdefault.StaticString("static"),
 			},
 			"unix_socket": schema.StringAttribute{
 				MarkdownDescription: "TODO",
@@ -233,67 +255,67 @@ func HaproxyServerDataSourceSchema() dschema.Schema {
 				Required:            true,
 			},
 			"address": schema.StringAttribute{
-				MarkdownDescription: "TODO",
+				MarkdownDescription: "Provide either the FQDN or the IP address of the server.",
 				Computed:            true,
 			},
 			"advanced": schema.StringAttribute{
-				MarkdownDescription: "advanced",
+				MarkdownDescription: "",
 				Computed:            true,
 			},
 			"check_down_interval": schema.Int64Attribute{
-				MarkdownDescription: "check_down_interval",
+				MarkdownDescription: "Sets the interval (in milliseconds) for running health checks on the server when the server state is DOWN. If it is not set HAProxy uses the check interval.",
 				Computed:            true,
 			},
 			"check_interval": schema.Int64Attribute{
-				MarkdownDescription: "basicAuthGroups",
+				MarkdownDescription: "Sets the interval (in milliseconds) for running health checks on this server. This setting takes precedence over default values in health monitors. It can still be overwritten from the backend pool.",
 				Computed:            true,
 			},
 			"checkport": schema.Int64Attribute{
-				MarkdownDescription: "TODO",
+				MarkdownDescription: "Provide the TCP communication port to use during check.",
 				Computed:            true,
 			},
 			"description": schema.StringAttribute{
-				MarkdownDescription: "TODO",
+				MarkdownDescription: "Description for the server.",
 				Computed:            true,
 			},
 			"enabled": schema.BoolAttribute{
-				MarkdownDescription: "TODO",
+				MarkdownDescription: "Enable the server.",
 				Computed:            true,
 			},
 			"linked_resolver": schema.StringAttribute{
-				MarkdownDescription: "TODO",
+				MarkdownDescription: "This certificate will be sent if the server send a client certificate request.",
 				Computed:            true,
 			},
 			"max_connections": schema.Int64Attribute{
-				MarkdownDescription: "TODO",
+				MarkdownDescription: "Specifies the maximal number of concurrent connections that will be sent to this server. The default value is 0 which means unlimited.",
 				Computed:            true,
 			},
 			"mode": schema.StringAttribute{
-				MarkdownDescription: "TODO",
+				MarkdownDescription: "Sets the operation mode to use for this server.  (active, backup, disabled)",
 				Computed:            true,
 			},
 			"multiplexer_protocol": schema.StringAttribute{
-				MarkdownDescription: "TODO",
+				MarkdownDescription: "Forces the multiplexer's protocol to use for the outgoing connections to this server. (unspecified, fcgi, h1, h2)",
 				Computed:            true,
 			},
 			"name": schema.StringAttribute{
-				MarkdownDescription: "TODO",
+				MarkdownDescription: "Name to identify a static server. When creating a server template, then this prefix is used for the server names to be built.",
 				Required:            true,
 			},
 			"number": schema.StringAttribute{
-				MarkdownDescription: "TODO",
+				MarkdownDescription: "",
 				Computed:            true,
 			},
 			"port": schema.Int64Attribute{
-				MarkdownDescription: "TODO",
+				MarkdownDescription: "Provide the TCP or UDP communication port for this server.",
 				Computed:            true,
 			},
 			"resolve_prefer": schema.StringAttribute{
-				MarkdownDescription: "TODO",
+				MarkdownDescription: "When DNS resolution is enabled for a server and multiple IP addresses from different families (ipv4, ipv6) are returned, HAProxy will prefer using an IP address from the selected family.",
 				Computed:            true,
 			},
 			"resolver_opts": schema.StringAttribute{
-				MarkdownDescription: "TODO",
+				MarkdownDescription: "(allow-dup-ip, ignore-weight, prevent-dup-ip)",
 				Computed:            true,
 			},
 			"service_name": schema.StringAttribute{
@@ -301,35 +323,36 @@ func HaproxyServerDataSourceSchema() dschema.Schema {
 				Computed:            true,
 			},
 			"source": schema.StringAttribute{
-				MarkdownDescription: "TODO",
+				MarkdownDescription: "Sets the source address which will be used when connecting to the server.",
 				Computed:            true,
 			},
 			"ssl": schema.BoolAttribute{
-				MarkdownDescription: "TODO",
+				MarkdownDescription: "Enable or disable SSL communication with this server.",
 				Computed:            true,
 			},
-			"ssl_ca": schema.StringAttribute{
-				MarkdownDescription: "TODO",
+			"ssl_ca": schema.SetAttribute{
+				MarkdownDescription: "The selected CAs will be used to verify the server certificate.",
 				Computed:            true,
+				ElementType:         types.StringType,
 			},
 			"ssl_client_certificate": schema.StringAttribute{
-				MarkdownDescription: "TODO",
+				MarkdownDescription: "This certificate will be sent if the server send a client certificate request.",
 				Computed:            true,
 			},
 			"ssl_crl": schema.StringAttribute{
-				MarkdownDescription: "TODO",
+				MarkdownDescription: "This certificate revocation list will be used to verify server's certificate.",
 				Computed:            true,
 			},
 			"ssl_sni": schema.StringAttribute{
-				MarkdownDescription: "TODO",
+				MarkdownDescription: "The host name sent in the SNI TLS extension to the server.",
 				Computed:            true,
 			},
 			"ssl_verify": schema.BoolAttribute{
-				MarkdownDescription: "TODO",
+				MarkdownDescription: "If disabled, server certificate is not verified. Otherwise the certificate provided by the server is verified using CAs and optional CRLs.",
 				Computed:            true,
 			},
 			"type": schema.StringAttribute{
-				MarkdownDescription: "TODO",
+				MarkdownDescription: "Either configure a static server or a template to initialize multiple servers with shared parameters. (static, template, unix)",
 				Computed:            true,
 			},
 			"unix_socket": schema.StringAttribute{
@@ -337,7 +360,7 @@ func HaproxyServerDataSourceSchema() dschema.Schema {
 				Computed:            true,
 			},
 			"weight": schema.Int64Attribute{
-				MarkdownDescription: "TODO",
+				MarkdownDescription: "Adjust the server's weight relative to other servers.",
 				Computed:            true,
 			},
 		},
@@ -365,7 +388,7 @@ func convertHaproxyServerSchemaToStruct(d *HaproxyServerResourceModel) (*haproxy
 		ServiceName:          d.ServiceName.ValueString(),
 		Source:               d.Source.ValueString(),
 		Ssl:                  tools.BoolToString(d.Ssl.ValueBool()),
-		SslCA:                api.SelectedMap(d.SslCA.ValueString()),
+		SslCA:                tools.SetToString(d.SslCA),
 		SslClientCertificate: api.SelectedMap(d.SslClientCertificate.ValueString()),
 		SslCRL:               api.SelectedMap(d.SslCRL.ValueString()),
 		SslSNI:               d.SslSNI.ValueString(),
@@ -397,7 +420,7 @@ func convertHaproxyServerStructToSchema(d *haproxy.Server) (*HaproxyServerResour
 		ServiceName:          types.StringValue(d.ServiceName),
 		Source:               types.StringValue(d.Source),
 		Ssl:                  types.BoolValue(tools.StringToBool(d.Ssl)),
-		SslCA:                types.StringValue(d.SslCA.String()),
+		SslCA:                tools.StringToSet(d.SslCA),
 		SslClientCertificate: types.StringValue(d.SslClientCertificate.String()),
 		SslCRL:               types.StringValue(d.SslCRL.String()),
 		SslSNI:               types.StringValue(d.SslSNI),
