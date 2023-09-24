@@ -93,6 +93,15 @@ func EmptySetValue() types.Set {
 	return sv
 }
 
+func AppendSetValue(s []string) types.Set {
+	set := make([]attr.Value, len(s))
+	for k, v := range s {
+		set[k] = types.StringValue(v)
+	}
+	sv, _ := types.SetValue(types.StringType, set)
+	return sv
+}
+
 func SetToString(set types.Set) []string {
 	var list []string
 	set.ElementsAs(context.Background(), &list, false)
@@ -105,7 +114,7 @@ func StringToSet(s []string) types.Set {
 	for _, i := range s {
 		list = append(list, basetypes.NewStringValue(i))
 	}
-	categoriesTypeList, _ := types.SetValue(types.StringType, list)
-	log.Println(categoriesTypeList)
-	return categoriesTypeList
+	typeList, _ := types.SetValue(types.StringType, list)
+	log.Println(typeList)
+	return typeList
 }
