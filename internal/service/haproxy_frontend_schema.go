@@ -48,11 +48,11 @@ type HaproxyFrontendResourceModel struct {
 	PrometheusPath               types.String `tfsdk:"prometheus_path"`
 	SslAdvancedEnabled           types.Bool   `tfsdk:"ssl_advanced_enabled"`
 	SslBindOptions               types.Set    `tfsdk:"ssl_bind_options"`
-	SslCertificates              types.String `tfsdk:"ssl_certificates"`
+	SslCertificates              types.Set    `tfsdk:"ssl_certificates"`
 	SslCipherList                types.String `tfsdk:"ssl_cipher_list"`
 	SslCipherSuites              types.String `tfsdk:"ssl_cipher_suites"`
-	SslClientAuthCAs             types.String `tfsdk:"ssl_client_auth_cas"`
-	SslClientAuthCRLs            types.String `tfsdk:"ssl_client_auth_crls"`
+	SslClientAuthCAs             types.Set    `tfsdk:"ssl_client_auth_cas"`
+	SslClientAuthCRLs            types.Set    `tfsdk:"ssl_client_auth_crls"`
 	SslClientAuthEnabled         types.Bool   `tfsdk:"ssl_client_auth_enabled"`
 	SslClientAuthVerify          types.String `tfsdk:"ssl_client_auth_verify"`
 	SslCustomOptions             types.String `tfsdk:"ssl_custom_options"`
@@ -277,11 +277,12 @@ func haproxyFrontendResourceSchema() schema.Schema {
 				},
 				Default: setdefault.StaticValue(tools.EmptySetValue()),
 			},
-			"ssl_certificates": schema.StringAttribute{
+			"ssl_certificates": schema.SetAttribute{
 				MarkdownDescription: "This certificate will be presented if no SNI is provided by the client or if the client provides an SNI hostname which does not match any certificate.",
 				Optional:            true,
 				Computed:            true,
-				Default:             stringdefault.StaticString(""),
+				ElementType:         types.StringType,
+				Default:             setdefault.StaticValue(tools.EmptySetValue()),
 			},
 			"ssl_cipher_list": schema.StringAttribute{
 				MarkdownDescription: "It sets the default string describing the list of cipher algorithms (\"cipher suite\") that are negotiated during the SSL/TLS handshake up to TLSv1.2.",
@@ -295,17 +296,19 @@ func haproxyFrontendResourceSchema() schema.Schema {
 				Computed:            true,
 				Default:             stringdefault.StaticString("TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256"),
 			},
-			"ssl_client_auth_cas": schema.StringAttribute{
+			"ssl_client_auth_cas": schema.SetAttribute{
 				MarkdownDescription: "Select CA certificates to use for client certificate authentication.",
 				Optional:            true,
 				Computed:            true,
-				Default:             stringdefault.StaticString(""),
+				ElementType:         types.StringType,
+				Default:             setdefault.StaticValue(tools.EmptySetValue()),
 			},
-			"ssl_client_auth_crls": schema.StringAttribute{
+			"ssl_client_auth_crls": schema.SetAttribute{
 				MarkdownDescription: "Select CRLs to use for client certificate authentication.",
 				Optional:            true,
 				Computed:            true,
-				Default:             stringdefault.StaticString(""),
+				ElementType:         types.StringType,
+				Default:             setdefault.StaticValue(tools.EmptySetValue()),
 			},
 			"ssl_client_auth_enabled": schema.BoolAttribute{
 				MarkdownDescription: "Enable Client Certificate Authentication.",
@@ -323,7 +326,7 @@ func haproxyFrontendResourceSchema() schema.Schema {
 				Default: stringdefault.StaticString("required"),
 			},
 			"ssl_custom_options": schema.StringAttribute{
-				MarkdownDescription: "TODO", //todo
+				MarkdownDescription: "Pass additional SSL parameters to the HAProxy configuration.",
 				Optional:            true,
 				Computed:            true,
 				Default:             stringdefault.StaticString(""),
@@ -637,9 +640,10 @@ func HaproxyFrontendDataSourceSchema() dschema.Schema {
 				Computed:            true,
 				ElementType:         types.StringType,
 			},
-			"ssl_certificates": schema.StringAttribute{
+			"ssl_certificates": schema.SetAttribute{
 				MarkdownDescription: "This certificate will be presented if no SNI is provided by the client or if the client provides an SNI hostname which does not match any certificate.",
 				Computed:            true,
+				ElementType:         types.StringType,
 			},
 			"ssl_cipher_list": schema.StringAttribute{
 				MarkdownDescription: "It sets the default string describing the list of cipher algorithms (\"cipher suite\") that are negotiated during the SSL/TLS handshake up to TLSv1.2.",
@@ -649,13 +653,15 @@ func HaproxyFrontendDataSourceSchema() dschema.Schema {
 				MarkdownDescription: "It sets the default string describing the list of cipher algorithms (cipher suite) that are negotiated during the SSL/TLS handshake for TLSv1.3.",
 				Computed:            true,
 			},
-			"ssl_client_auth_cas": schema.StringAttribute{
+			"ssl_client_auth_cas": schema.SetAttribute{
 				MarkdownDescription: "Select CA certificates to use for client certificate authentication.",
 				Computed:            true,
+				ElementType:         types.StringType,
 			},
-			"ssl_client_auth_crls": schema.StringAttribute{
+			"ssl_client_auth_crls": schema.SetAttribute{
 				MarkdownDescription: "Select CRLs to use for client certificate authentication.",
 				Computed:            true,
+				ElementType:         types.StringType,
 			},
 			"ssl_client_auth_enabled": schema.BoolAttribute{
 				MarkdownDescription: "Enable Client Certificate Authentication.",
@@ -666,7 +672,7 @@ func HaproxyFrontendDataSourceSchema() dschema.Schema {
 				Computed:            true,
 			},
 			"ssl_custom_options": schema.StringAttribute{
-				MarkdownDescription: "TODO",
+				MarkdownDescription: "Pass additional SSL parameters to the HAProxy configuration.",
 				Computed:            true,
 			},
 			"ssl_default_certificate": schema.StringAttribute{
@@ -808,11 +814,11 @@ func convertHaproxyFrontendSchemaToStruct(d *HaproxyFrontendResourceModel) (*hap
 		PrometheusPath:               d.PrometheusPath.ValueString(),
 		SslAdvancedEnabled:           tools.BoolToString(d.SslAdvancedEnabled.ValueBool()),
 		SslBindOptions:               tools.SetToString(d.SslBindOptions),
-		SslCertificates:              api.SelectedMap(d.SslCertificates.ValueString()),
+		SslCertificates:              tools.SetToString(d.SslCertificates),
 		SslCipherList:                d.SslCipherList.ValueString(),
 		SslCipherSuites:              d.SslCipherSuites.ValueString(),
-		SslClientAuthCAs:             api.SelectedMap(d.SslClientAuthCAs.ValueString()),
-		SslClientAuthCRLs:            api.SelectedMap(d.SslClientAuthCRLs.ValueString()),
+		SslClientAuthCAs:             tools.SetToString(d.SslClientAuthCAs),
+		SslClientAuthCRLs:            tools.SetToString(d.SslClientAuthCRLs),
 		SslClientAuthEnabled:         tools.BoolToString(d.SslClientAuthEnabled.ValueBool()),
 		SslClientAuthVerify:          api.SelectedMap(d.SslClientAuthVerify.ValueString()),
 		SslCustomOptions:             d.SslCustomOptions.ValueString(),
@@ -875,11 +881,11 @@ func convertHaproxyFrontendStructToSchema(d *haproxy.Frontend) (*HaproxyFrontend
 		PrometheusPath:               types.StringValue(d.PrometheusPath),
 		SslAdvancedEnabled:           types.BoolValue(tools.StringToBool(d.SslAdvancedEnabled)),
 		SslBindOptions:               tools.StringToSet(d.SslBindOptions),
-		SslCertificates:              types.StringValue(d.SslCertificates.String()),
+		SslCertificates:              tools.StringToSet(d.SslCertificates),
 		SslCipherList:                types.StringValue(d.SslCipherList),
 		SslCipherSuites:              types.StringValue(d.SslCipherSuites),
-		SslClientAuthCAs:             types.StringValue(d.SslClientAuthCAs.String()),
-		SslClientAuthCRLs:            types.StringValue(d.SslClientAuthCRLs.String()),
+		SslClientAuthCAs:             tools.StringToSet(d.SslClientAuthCAs),
+		SslClientAuthCRLs:            tools.StringToSet(d.SslClientAuthCRLs),
 		SslClientAuthEnabled:         types.BoolValue(tools.StringToBool(d.SslClientAuthEnabled)),
 		SslClientAuthVerify:          types.StringValue(d.SslClientAuthVerify.String()),
 		SslCustomOptions:             types.StringValue(d.SslCustomOptions),

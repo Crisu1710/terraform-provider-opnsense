@@ -3,6 +3,7 @@ package service
 import (
 	"github.com/browningluke/opnsense-go/pkg/api"
 	"github.com/browningluke/opnsense-go/pkg/haproxy"
+	"github.com/hashicorp/terraform-plugin-framework-validators/setvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	dschema "github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -34,7 +35,7 @@ type HaproxyServerResourceModel struct {
 	Number               types.String `tfsdk:"number"`
 	Port                 types.Int64  `tfsdk:"port"`
 	ResolvePrefer        types.String `tfsdk:"resolve_prefer"`
-	ResolverOpts         types.String `tfsdk:"resolver_opts"`
+	ResolverOpts         types.Set    `tfsdk:"resolver_opts"`
 	ServiceName          types.String `tfsdk:"service_name"`
 	Source               types.String `tfsdk:"source"`
 	Ssl                  types.Bool   `tfsdk:"ssl"`
@@ -155,17 +156,18 @@ func haproxyServerResourceSchema() schema.Schema {
 				},
 				Default: stringdefault.StaticString(""),
 			},
-			"resolver_opts": schema.StringAttribute{
-				MarkdownDescription: "(allow-dup-ip, ignore-weight, prevent-dup-ip)",
+			"resolver_opts": schema.SetAttribute{
+				MarkdownDescription: "Set latest allow-dup-ip, ignore-weight, prevent-dup-ip",
 				Optional:            true,
 				Computed:            true,
-				Validators: []validator.String{
-					stringvalidator.OneOf("", "allow-dup-ip", "ignore-weight", "prevent-dup-ip"),
+				ElementType:         types.StringType,
+				Validators: []validator.Set{
+					setvalidator.ValueStringsAre(stringvalidator.OneOf("", "allow-dup-ip", "ignore-weight", "prevent-dup-ip")),
 				},
-				Default: stringdefault.StaticString(""),
+				Default: setdefault.StaticValue(tools.EmptySetValue()),
 			},
 			"service_name": schema.StringAttribute{
-				MarkdownDescription: "TODO",
+				MarkdownDescription: "Provide either the FQDN for all the servers this template initializes or a service name to discover the available services via DNS SRV records.",
 				Optional:            true,
 				Computed:            true,
 				Default:             stringdefault.StaticString(""),
@@ -223,7 +225,7 @@ func haproxyServerResourceSchema() schema.Schema {
 				Default: stringdefault.StaticString("static"),
 			},
 			"unix_socket": schema.StringAttribute{
-				MarkdownDescription: "TODO",
+				MarkdownDescription: "Select the frontend that provides the UNIX socket. This UNIX socket will be used as the server's address, making it possible to send connections to this frontend. Only frontends that provide the unix@ pattern as listen address can be selected.",
 				Optional:            true,
 				Computed:            true,
 				Default:             stringdefault.StaticString(""),
@@ -314,12 +316,13 @@ func HaproxyServerDataSourceSchema() dschema.Schema {
 				MarkdownDescription: "When DNS resolution is enabled for a server and multiple IP addresses from different families (ipv4, ipv6) are returned, HAProxy will prefer using an IP address from the selected family.",
 				Computed:            true,
 			},
-			"resolver_opts": schema.StringAttribute{
+			"resolver_opts": schema.SetAttribute{
 				MarkdownDescription: "(allow-dup-ip, ignore-weight, prevent-dup-ip)",
 				Computed:            true,
+				ElementType:         types.StringType,
 			},
 			"service_name": schema.StringAttribute{
-				MarkdownDescription: "TODO",
+				MarkdownDescription: "Provide either the FQDN for all the servers this template initializes or a service name to discover the available services via DNS SRV records.",
 				Computed:            true,
 			},
 			"source": schema.StringAttribute{
@@ -356,7 +359,7 @@ func HaproxyServerDataSourceSchema() dschema.Schema {
 				Computed:            true,
 			},
 			"unix_socket": schema.StringAttribute{
-				MarkdownDescription: "TODO",
+				MarkdownDescription: "Select the frontend that provides the UNIX socket. This UNIX socket will be used as the server's address, making it possible to send connections to this frontend. Only frontends that provide the unix@ pattern as listen address can be selected.",
 				Computed:            true,
 			},
 			"weight": schema.Int64Attribute{
@@ -384,7 +387,7 @@ func convertHaproxyServerSchemaToStruct(d *HaproxyServerResourceModel) (*haproxy
 		Number:               d.Number.ValueString(),
 		Port:                 tools.Int64ToStringNegative(d.Port.ValueInt64()),
 		ResolvePrefer:        api.SelectedMap(d.ResolvePrefer.ValueString()),
-		ResolverOpts:         api.SelectedMap(d.ResolverOpts.ValueString()),
+		ResolverOpts:         tools.SetToString(d.ResolverOpts),
 		ServiceName:          d.ServiceName.ValueString(),
 		Source:               d.Source.ValueString(),
 		Ssl:                  tools.BoolToString(d.Ssl.ValueBool()),
@@ -416,7 +419,7 @@ func convertHaproxyServerStructToSchema(d *haproxy.Server) (*HaproxyServerResour
 		Number:               types.StringValue(d.Number),
 		Port:                 types.Int64Value(tools.StringToInt64(d.Port)),
 		ResolvePrefer:        types.StringValue(d.ResolvePrefer.String()),
-		ResolverOpts:         types.StringValue(d.ResolverOpts.String()),
+		ResolverOpts:         tools.StringToSet(d.ResolverOpts),
 		ServiceName:          types.StringValue(d.ServiceName),
 		Source:               types.StringValue(d.Source),
 		Ssl:                  types.BoolValue(tools.StringToBool(d.Ssl)),
